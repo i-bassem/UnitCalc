@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Payment Calculator — Zelal / Dyarna</title>
+  <style>
+    :root{--bg:#f6f8fa;--card:#fff;--muted:#6b7280;--accent:#0ea5a4}
+    body{font-family:Inter,Roboto,system-ui,Segoe UI,Arial;margin:24px;background:var(--bg);color:#0f172a}
+    .container{max-width:1000px;margin:0 auto}
+    h1{font-size:20px;margin:0 0 14px}
+    .card{background:var(--card);border-radius:12px;box-shadow:0 6px 18px rgba(12,16,23,0.06);padding:18px;margin-bottom:18px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type="number"], input[type="date"], select{width:100%;padding:10px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .grid-2{grid-template-columns:repeat(2,1fr)}
+    .controls{display:flex;gap:8px;margin-top:8px}
+    button{background:var(--accent);color:white;padding:10px 12px;border-radius:8px;border:0;cursor:pointer}
+    button.secondary{background:#111827;color:white}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px;border-bottom:1px solid #eef2f7;font-size:13px;text-align:right}
+    th{background:#fbfcfd;text-align:left}
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:12px;color:var(--muted)}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+    @media(max-width:780px){.grid{grid-template-columns:1fr}.footer{flex-direction:column;gap:8px}}
+    .overview-table td,.overview-table th{text-align:left;border:none;padding:4px 8px;font-size:13px}
+    .overview-table th{color:var(--muted)}
+    #summaryTop{font-weight:600;font-size:15px;margin-bottom:10px;color:#0f172a}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Payment Calculator — Zelal / Dyarna</h1>
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label>Project</label>
+          <select id="project">
+            <option value="zelal">Zelal</option>
+            <option value="dyarna">Dyarna</option>
+          </select>
+        </div>
+        <div>
+          <label>Price per m² (EGP)</label>
+          <input id="price" type="number" value="33250" min="0" />
+        </div>
+        <div>
+          <label>Area (m²)</label>
+          <input id="area" type="number" value="147" min="1" />
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="grid grid-2">
+        <div>
+          <label>Booking / Registration date</label>
+          <input id="startDate" type="date" value="2025-10-10" />
+        </div>
+        <div>
+          <label>Financing term for remaining 50%</label>
+          <select id="term">
+            <option value="5">5 years (20 quarterly payments)</option>
+            <option value="3">3 years (12 quarterly payments)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="grid">
+        <div>
+          <label>Annual interest rate (APR %) — enter 0 for principal-only</label>
+          <input id="apr" type="number" step="0.01" value="18" min="0" />
+        </div>
+        <div>
+          <label><span>Include Ministry (2%) + Collection (0.5%) fees</span></label>
+          <select id="includeFees">
+            <option value="yes">Yes — add 2.5% to APR</option>
+            <option value="no">No — use APR as entered</option>
+          </select>
+        </div>
+        <div>
+          <label>Show principal-only amortization?</label>
+          <select id="principalOnly">
+            <option value="no">No — show amortized payment with interest</option>
+            <option value="yes">Yes — show principal-only payments for financed 50%</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="compute" type="button">Compute Schedule</button>
+        <button id="download" type="button" class="secondary">Download CSV</button>
+        <div style="flex:1"></div>
+        <div class="small muted">Defaults follow each project’s contract details automatically.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="summaryTop"></div>
+      <div id="overview"></div>
+      <div id="tableWrap"></div>
+      <div class="footer">
+        <div class="muted" id="totals"></div>
+        <div><button id="reset" type="button">Reset inputs</button></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function addMonths(date, months){
+      const d = new Date(date.getTime());
+      const day = d.getDate();
+      d.setMonth(d.getMonth() + months);
+      if(d.getDate() < day) d.setDate(0);
+      return d;
+    }
+
+    function fmtDate(d){
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function numberFormat(x){
+      return (Math.round(x*100)/100).toLocaleString('en-US');
+    }
+
+    function generateSchedule(){
+      const project = document.getElementById('project').value;
+      const price = Number(document.getElementById('price').value) || 0;
+      const area = Number(document.getElementById('area').value) || 0;
+      const start = new Date(document.getElementById('startDate').value + 'T00:00:00');
+      const termYears = Number(document.getElementById('term').value);
+      const apr = Number(document.getElementById('apr').value) || 0;
+      const includeFees = document.getElementById('includeFees').value === 'yes';
+      const principalOnly = document.getElementById('principalOnly').value === 'yes';
+
+      let bookingTotal, quarterlyInitial, annualAmt;
+      if(project === 'dyarna'){
+        bookingTotal = 201000;
+        quarterlyInitial = 75000;
+        annualAmt = 100000;
+      } else {
+        bookingTotal = 251000;
+        quarterlyInitial = 100000;
+        annualAmt = 150000;
+      }
+
+      const numQuartersInitial = 12;
+      const numAnnuals = 3;
+
+      const totalPrice = price * area;
+      const halfTotal = totalPrice / 2;
+      const sumBeforeTopup = bookingTotal + (quarterlyInitial * numQuartersInitial) + (annualAmt * numAnnuals);
+      const topup = halfTotal - sumBeforeTopup;
+      const financedPrincipal = halfTotal;
+      const financedQuarters = termYears * 4;
+
+      let effectiveAPR = apr;
+      if(includeFees) effectiveAPR = apr + 2.0 + 0.5;
+      const r = (effectiveAPR/100) / 4;
+
+      let quarterlyPaymentWithInterest = 0;
+      if(!principalOnly){
+        if(r === 0){
+          quarterlyPaymentWithInterest = financedPrincipal / financedQuarters;
+        } else {
+          quarterlyPaymentWithInterest = (r * financedPrincipal) / (1 - Math.pow(1 + r, -financedQuarters));
+        }
+      }
+
+      const rows = [];
+      rows.push({date: start, desc: 'Booking fee + registration (non-refundable)', amount: bookingTotal});
+
+      let qStart = addMonths(start, 3);
+      for(let i=0;i<numQuartersInitial;i++){
+        rows.push({date: addMonths(qStart, 3*i), desc: `Quarterly payment ${i+1} of ${numQuartersInitial} (initial ${numberFormat(quarterlyInitial)})`, amount: quarterlyInitial});
+      }
+
+      for(let i=0;i<numAnnuals;i++){
+        rows.push({date: addMonths(start, 12*(i+1)), desc: `Annual payment ${i+1} of ${numAnnuals} (${numberFormat(annualAmt)})`, amount: annualAmt});
+      }
+
+      const lastAnnual = addMonths(start, 12*numAnnuals);
+      const midTopupDate = addMonths(lastAnnual, 1);
+      rows.push({date: midTopupDate, desc: 'Mid top-up payment (1 month after last annual)', amount: Math.round((topup/2)*100)/100});
+      const topupDate = addMonths(lastAnnual, 2);
+      rows.push({date: topupDate, desc: 'Final top-up to reach 50% of total (2 months after last annual)', amount: Math.round((topup/2)*100)/100});
+
+      const financedStart = addMonths(topupDate, 3);
+      let balance = financedPrincipal;
+      for(let i=0;i<financedQuarters;i++){
+        const payDate = addMonths(financedStart, 3*i);
+        if(principalOnly){
+          const principalPay = Math.round((financedPrincipal/financedQuarters)*100)/100;
+          rows.push({date: payDate, desc: `Financed quarterly principal ${i+1} of ${financedQuarters} (principal only)`, amount: principalPay});
+        } else {
+          const payment = quarterlyPaymentWithInterest;
+          const interest = balance * r;
+          const principal = payment - interest;
+          const princRounded = Math.round(principal*100)/100;
+          balance = Math.round((balance - princRounded)*100)/100;
+          if(i === financedQuarters -1 && Math.abs(balance) > 0.01){
+            const adjust = balance;
+            rows.push({date: payDate, desc: `Financed quarterly payment ${i+1} of ${financedQuarters} (final, incl residual)`, amount: Math.round((payment+adjust)*100)/100});
+            balance = 0;
+          } else {
+            rows.push({date: payDate, desc: `Financed quarterly payment ${i+1} of ${financedQuarters}`, amount: Math.round(payment*100)/100});
+          }
+        }
+      }
+
+      rows.sort((a,b)=>a.date - b.date);
+
+      let html = '<table><thead><tr><th>Date</th><th>Description</th><th>Amount (EGP)</th><th>Cumulative (EGP)</th><th>Cumulative % of total</th></tr></thead><tbody>';
+      let cumulative = 0;
+      for(const rrow of rows){
+        cumulative += rrow.amount;
+        html += `<tr><td style="text-align:left">${fmtDate(rrow.date)}</td><td style="text-align:left">${rrow.desc}</td><td>${numberFormat(rrow.amount)}</td><td>${numberFormat(cumulative)}</td><td>${(cumulative/totalPrice*100).toFixed(4)}%</td></tr>`;
+      }
+      html += '</tbody></table>';
+
+      const overviewTable = `
+      <table class='overview-table'>
+        <tr><th colspan='2'>Quick Arithmetic Overview</th></tr>
+        <tr><td>Total unit price</td><td>${numberFormat(price)} × ${area} = ${numberFormat(totalPrice)} EGP</td></tr>
+        <tr><td>50% of total</td><td>${numberFormat(halfTotal)} EGP</td></tr>
+        <tr><td>Booking + registration</td><td>${numberFormat(bookingTotal)} EGP</td></tr>
+        <tr><td>Quarterly payments (×12)</td><td>${numberFormat(quarterlyInitial)} × 12 = ${numberFormat(quarterlyInitial*12)} EGP</td></tr>
+        <tr><td>Annual payments (×3)</td><td>${numberFormat(annualAmt)} × 3 = ${numberFormat(annualAmt*3)} EGP</td></tr>
+        <tr><td>Sum before top-up</td><td>${numberFormat(sumBeforeTopup)} EGP</td></tr>
+        <tr><td>Top-up to reach 50%</td><td>${numberFormat(topup)} EGP</td></tr>
+        <tr><td>Remaining 50% financed</td><td>${numberFormat(financedPrincipal)} EGP over ${termYears} years (${financedQuarters} quarters)</td></tr>
+      </table>`;
+
+      document.getElementById('overview').innerHTML = overviewTable;
+      document.getElementById('tableWrap').innerHTML = html;
+      document.getElementById('summaryTop').textContent = `Project: ${project.toUpperCase()} — Total unit price = ${numberFormat(totalPrice)} EGP | 50% = ${numberFormat(halfTotal)} EGP | Sum before top-up = ${numberFormat(sumBeforeTopup)} EGP | Top-up = ${numberFormat(topup)} EGP`;
+      document.getElementById('totals').textContent = `Final cumulative: ${numberFormat(cumulative)} EGP (${(cumulative/totalPrice*100).toFixed(2)}% of total)`;
+
+      window._lastRows = rows;
+      window._meta = {totalPrice, halfTotal};
+    }
+
+    document.getElementById('compute').addEventListener('click', generateSchedule);
+    document.getElementById('reset').addEventListener('click', ()=>{
+      document.getElementById('price').value = 33250;
+      document.getElementById('area').value = 147;
+      document.getElementById('startDate').value = '2025-10-10';
+      document.getElementById('apr').value = 18;
+      document.getElementById('includeFees').value = 'yes';
+      document.getElementById('principalOnly').value = 'no';
+      document.getElementById('term').value = '5';
+      document.getElementById('project').value = 'zelal';
+      document.getElementById('overview').innerHTML = '';
+      document.getElementById('summaryTop').textContent = '';
+      document.getElementById('tableWrap').innerHTML = '';
+      document.getElementById('totals').textContent = '';
+      window._lastRows = null;
+    });
+
+    document.getElementById('download').addEventListener('click', ()=>{
+      const rows = window._lastRows;
+      if(!rows){ alert('Please compute schedule first'); return; }
+      const meta = window._meta || {};
+      let csv = 'Date,Description,Amount (EGP)\r\n';
+      for(const r of rows){
+        csv += `${fmtDate(r.date)},"${r.desc}",${r.amount}\r\n`;
+      }
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `payment_schedule_${meta.totalPrice || 'unit'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
