@@ -7,26 +7,26 @@
   <style>
     :root{--bg:#f6f8fa;--card:#fff;--muted:#6b7280;--accent:#0ea5a4}
     body{font-family:Inter,Roboto,system-ui,Segoe UI,Arial;margin:24px;background:var(--bg);color:#0f172a}
-    .container{max-width:1000px;margin:0 auto}
-    h1{font-size:20px;margin:0 0 14px}
-    .card{background:var(--card);border-radius:12px;box-shadow:0 6px 18px rgba(12,16,23,0.06);padding:18px;margin-bottom:18px}
+    .container{max-width:1000px;margin:0 auto;padding:0 10px}
+    h1{font-size:20px;margin:0 0 14px;text-align:center}
+    .card{background:var(--card);border-radius:12px;box-shadow:0 6px 18px rgba(12,16,23,0.06);padding:18px;margin-bottom:18px;overflow-x:auto}
     label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-    input[type="number"], input[type="date"], select{width:100%;padding:10px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    input[type="number"], input[type="date"], select{width:100%;padding:10px;border:1px solid #e6e9ef;border-radius:8px;font-size:14px;box-sizing:border-box}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end}
     .grid-2{grid-template-columns:repeat(2,1fr)}
-    .controls{display:flex;gap:8px;margin-top:8px}
-    button{background:var(--accent);color:white;padding:10px 12px;border-radius:8px;border:0;cursor:pointer}
+    .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+    button{background:var(--accent);color:white;padding:10px 12px;border-radius:8px;border:0;cursor:pointer;white-space:nowrap}
     button.secondary{background:#111827;color:white}
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{padding:8px;border-bottom:1px solid #eef2f7;font-size:13px;text-align:right}
+    table{width:100%;border-collapse:collapse;margin-top:12px;min-width:700px}
+    th,td{padding:8px;border-bottom:1px solid #eef2f7;font-size:13px;text-align:right;white-space:nowrap}
     th{background:#fbfcfd;text-align:left}
     .muted{color:var(--muted);font-size:13px}
     .small{font-size:12px;color:var(--muted)}
-    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
-    @media(max-width:780px){.grid{grid-template-columns:1fr}.footer{flex-direction:column;gap:8px}}
-    .overview-table td,.overview-table th{text-align:left;border:none;padding:4px 8px;font-size:13px}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:8px}
+    @media(max-width:780px){.grid{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}.footer{flex-direction:column;align-items:flex-start}.card{overflow-x:auto}}
+    .overview-table td,.overview-table th{text-align:left;border:none;padding:4px 8px;font-size:13px;white-space:nowrap}
     .overview-table th{color:var(--muted)}
-    #summaryTop{font-weight:600;font-size:15px;margin-bottom:10px;color:#0f172a}
+    #summaryTop{font-weight:600;font-size:15px;margin-bottom:10px;color:#0f172a;text-align:center}
   </style>
 </head>
 <body>
@@ -91,7 +91,6 @@
       <div class="controls">
         <button id="compute" type="button">Compute Schedule</button>
         <button id="download" type="button" class="secondary">Download CSV</button>
-        <div style="flex:1"></div>
         <div class="small muted">Defaults follow each project’s contract details automatically.</div>
       </div>
     </div>
@@ -215,13 +214,13 @@
 
       rows.sort((a,b)=>a.date - b.date);
 
-      let html = '<table><thead><tr><th>Date</th><th>Description</th><th>Amount (EGP)</th><th>Cumulative (EGP)</th><th>Cumulative % of total</th></tr></thead><tbody>';
+      let html = '<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Description</th><th>Amount (EGP)</th><th>Cumulative (EGP)</th><th>Cumulative % of total</th></tr></thead><tbody>';
       let cumulative = 0;
       for(const rrow of rows){
         cumulative += rrow.amount;
         html += `<tr><td style="text-align:left">${fmtDate(rrow.date)}</td><td style="text-align:left">${rrow.desc}</td><td>${numberFormat(rrow.amount)}</td><td>${numberFormat(cumulative)}</td><td>${(cumulative/totalPrice*100).toFixed(4)}%</td></tr>`;
       }
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
 
       const overviewTable = `
       <table class='overview-table'>
@@ -283,3 +282,4 @@
   </script>
 </body>
 </html>
+
